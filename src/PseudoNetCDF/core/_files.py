@@ -1,5 +1,6 @@
 __all__ = ['PseudoNetCDFFile', 'netcdf', 'PseudoNetCDFVariables']
 import unittest
+
 from PseudoNetCDF._getreader import registerreader
 from PseudoNetCDF.netcdf import NetCDFFile, NetCDFVariable
 from PseudoNetCDF.pncwarn import warn
@@ -10,6 +11,9 @@ import numpy as np
 
 
 class OrderedDefaultDict(OrderedDict):
+    """
+    如类名,设置有序默认字典,可以参考collections.defaultdict()
+    """
     def __init__(self, *args, **kwargs):
         if not args:
             self.default_factory = None
@@ -21,6 +25,9 @@ class OrderedDefaultDict(OrderedDict):
         super(OrderedDefaultDict, self).__init__(*args, **kwargs)
 
     def __missing__(self, key):
+        """
+        当key不存在时由此方法提供返回值,default_factory未指定时报KeyError
+        """
         if self.default_factory is None:
             raise KeyError(key)
         self[key] = default = self.default_factory()
@@ -30,6 +37,12 @@ class OrderedDefaultDict(OrderedDict):
 class PseudoNetCDFType(type):
     """
     Create a PseudoNetCDFType meta-class
+    PseudoNetCDFType 元类
+    当我们定义了类以后，就可以根据这个类创建出实例，所以：先定义类，然后创建实例。
+    但是如果我们想创建出类呢？那就必须根据metaclass创建出类，所以：先定义metaclass，然后创建类。
+    连接起来就是：先定义metaclass，就可以创建类，最后创建实例。
+    所以，metaclass允许你创建类或者修改类。换句话说，你可以把类看成是metaclass创建出来的“实例”。
+
     """
     def __init__(cls, name, bases, clsdict):
         pieces = str(cls).split('\'')[1].split('.')
@@ -54,6 +67,10 @@ class PseudoNetCDFFile(PseudoNetCDFSelfReg, object):
     PseudoNetCDFFile provides an interface and standard set of
     methods that a file should present to act like a netCDF file
     using the Scientific.IO.NetCDF.NetCDFFile interface.
+
+    pseudoNetCdfile提供了一个接口和一组标准方法，
+    文件应使用Scientific.IO.netCDF.netCdfile接口显示这些接口和方法，
+    以使其与netCDF文件类似。
     """
 
     def getMap(self, maptype='basemap_auto', **kwds):
@@ -76,12 +93,14 @@ class PseudoNetCDFFile(PseudoNetCDFSelfReg, object):
         """
         if maptype.startswith('basemap'):
             from PseudoNetCDF.coordutil import basemap_from_proj4
+
+            # 如果maptype=basemap_auto，并且变量里有边界经纬度
             if (
                 maptype.endswith('_auto') and
                 'longitude_bounds' in self.variables and
                 'latitude_bounds' in self.variables
             ):
-                # Get edges for bounding
+                # 选择边界经纬度
                 lonb = self.variables['longitude_bounds']
                 latb = self.variables['latitude_bounds']
                 if lonb.ndim == 3:
@@ -102,11 +121,16 @@ class PseudoNetCDFFile(PseudoNetCDFSelfReg, object):
                 elif latb.ndim == 1:
                     llcrnrlat = latb[0]
                     urcrnrlat = latb[-1]
+
+                # 获取到左下角和右上角的边界经纬度,加入到参数中
                 edges = dict(llcrnrlon=llcrnrlon, llcrnrlat=llcrnrlat,
                              urcrnrlon=urcrnrlon, urcrnrlat=urcrnrlat)
                 kwds.update(edges)
+
+            # 获取proj4字符串格式的投影，然后转换为basemap
             myproj = self.getproj(withgrid=True, projformat='proj4')
             return basemap_from_proj4(myproj, **kwds)
+
         elif maptype == 'cartopy':
             raise ValueError('cartopy is not yet implemented')
         else:
@@ -115,12 +139,12 @@ class PseudoNetCDFFile(PseudoNetCDFSelfReg, object):
 
     def getproj(self, withgrid=False, projformat='pyproj'):
         """
-        Description
-
+        从文件中获取字符串格式的投影，支持pyproj，proj4和wkt
         Parameters
         ----------
         withgrid : boolean
             use grid units instead of meters
+            使用网格单位代替米
         projformat : string
             'pyproj' (default), 'proj4' or 'wkt' allows function to
             return a pyproj projection object or a string in the
@@ -131,6 +155,7 @@ class PseudoNetCDFFile(PseudoNetCDFSelfReg, object):
         proj : string pyproj.Proj
              (wkt, proj4) or pyprojProj (pyproj)
         """
+        # 根据格式不同,调用对应的函数
         if projformat == 'pyproj':
             from PseudoNetCDF.coordutil import getproj
             return getproj(self, withgrid=withgrid)

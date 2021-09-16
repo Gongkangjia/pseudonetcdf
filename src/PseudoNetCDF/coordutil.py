@@ -47,8 +47,8 @@ def getlonlatcoordstr(ifile, makemesh=None):
     lat = ifile.variables['latitude']
 
     if (
-        lon.dimensions != lat.dimensions or
-        (lon.dimensions == ('longitude',) and lat.dimensions == ('latitude',))
+            lon.dimensions != lat.dimensions or
+            (lon.dimensions == ('longitude',) and lat.dimensions == ('latitude',))
     ):
         lon, lat = np.meshgrid(lon[:], lat[:])
 
@@ -60,17 +60,17 @@ def _parse_ref_date(base):
     fmts = [
         # has time and Z
         (lambda x: x.count(':') == 2 and x[-3:] ==
-         'UTC', '+0000', '%Y-%m-%d %H:%M:%S UTC%z'),
+                   'UTC', '+0000', '%Y-%m-%d %H:%M:%S UTC%z'),
         # has time and Z
         (lambda x: x.count(':') == 1 and x[-3:] ==
-         'UTC', '+0000', '%Y-%m-%d %H:%M UTC%z'),
+                   'UTC', '+0000', '%Y-%m-%d %H:%M UTC%z'),
         (lambda x: 'UTC' in x, '+0000', '%Y-%m-%d %H UTC%z'),  # has hour and Z
         # has time and Z
         (lambda x: x.count(':') ==
-         2 and x[-1] == 'Z', '+0000', '%Y-%m-%d %H:%M:%SZ%z'),
+                   2 and x[-1] == 'Z', '+0000', '%Y-%m-%d %H:%M:%SZ%z'),
         # has time and Z
         (lambda x: x.count(':') ==
-         1 and x[-1] == 'Z', '+0000', '%Y-%m-%d %H:%MZ%z'),
+                   1 and x[-1] == 'Z', '+0000', '%Y-%m-%d %H:%MZ%z'),
         (lambda x: 'Z' == x[-1], '+0000',
          '%Y-%m-%d %HZ%z'),  # has hour and Z
         # full ISO8601 datetime with numeric timezone info
@@ -120,7 +120,7 @@ def gettimes(ifile):
             unit, base = time.units.strip().split(' since ')
             sdate = _parse_ref_date(base)
             out = sdate + \
-                np.array([timedelta(**{unit: float(i)}) for i in time[:]])
+                  np.array([timedelta(**{unit: float(i)}) for i in time[:]])
             return out
         else:
             return time
@@ -167,7 +167,7 @@ def gettimebnds(ifile):
     elif 'tau0' in ifile.variables.keys() and 'tau1' in ifile.variables.keys():
         out1 = (datetime(1985, 1, 1, 0) +
                 np.array([timedelta(hours=i)
-                         for i in ifile.variables['tau0'][:]]))
+                          for i in ifile.variables['tau0'][:]]))
         out2 = (datetime(1985, 1, 1, 0) +
                 np.array([timedelta(hours=i)
                           for i in ifile.variables['tau1'][:]]))
@@ -178,7 +178,7 @@ def gettimebnds(ifile):
             unit, base = time.units.strip().split(' since ')
             sdate = _parse_ref_date(base)
             out = sdate + \
-                np.array([timedelta(**{unit: float(i)}) for i in time[:]])
+                  np.array([timedelta(**{unit: float(i)}) for i in time[:]])
             if len(out) > 1:
                 dt = (out[1] - out[0])
             else:
@@ -445,7 +445,7 @@ def basemap_from_file(ifile, withgrid=False, **kwds):
             basemap_options['urcrnrx'] = kwds['urcrnrx']
         elif 'width' in kwds:
             basemap_options['urcrnrx'] = basemap_options['llcrnrx'] + \
-                kwds['width']
+                                         kwds['width']
         elif 'x' in ifile.variables:
             x = ifile.variables['x']
             urx = x.max() + np.mean(np.diff(x))
@@ -459,7 +459,7 @@ def basemap_from_file(ifile, withgrid=False, **kwds):
             basemap_options['urcrnry'] = kwds['urcrnry']
         elif 'height' in kwds:
             basemap_options['urcrnry'] = basemap_options['llcrnry'] + \
-                kwds['height']
+                                         kwds['height']
         elif 'y' in ifile.variables:
             y = ifile.variables['y']
             ury = y.max() + np.mean(np.diff(y))
@@ -477,14 +477,24 @@ def basemap_from_file(ifile, withgrid=False, **kwds):
 
 def basemap_options_from_proj4(proj4, **kwds):
     """
+    将proj4字符串解析成basemap的构造参数
+
     proj4 - string with projection optoins according to the proj4 system
+            像下面这样的
+            proj +proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0
+                 +units=m +nadgrids=@null +wktext  +no_defs
+
     kwds - add keywords to control basemap specific options
         resolution = 'i' or 'c' or 'h' controls dpi of boundaries
         llcrnrlon=None, llcrnrlat=None, urcrnrlon=None, urcrnrlat=None,
         llcrnrx=None, llcrnry=None, urcrnrx=None, urcrnry=None,
         width=None, height=None,
+
     """
+
     excluded = ('proj', 'a', 'b', 'x_0', 'y_0', 'to_meter')
+
+    # 将proj4字符串转化为dict
     proj4_options = OrderedDict()
     for seg in proj4.split():
         if '=' in seg:
@@ -493,31 +503,45 @@ def basemap_options_from_proj4(proj4, **kwds):
                 v = '"' + v + '"'
             proj4_options[k.replace('+', '')] = eval(v)
 
+    # 转化为basemap参数,把不需要的可以去掉
     basemap_options = dict(
         [(k, v) for k, v in proj4_options.items() if k not in excluded])
+    # 然后重命名部分参数
     basemap_options['projection'] = proj4_options['proj']
+
+    # 将各种定义转化为rsphere
+    # 如果定义了a和b就传给rsphere
     if 'a' in proj4_options and 'b' in proj4_options:
         basemap_options['rsphere'] = (proj4_options['a'], proj4_options['b'])
+
+    # 如果定义了a和f,f就是长短半轴之比
     elif 'a' in proj4_options and 'f' in proj4_options:
         basemap_options['rsphere'] = (
             proj4_options['a'],
             -(proj4_options['f'] * proj4_options['a'] - proj4_options['a']))
+    # 如果只定义了a就是圆
     elif 'a' in proj4_options:
         basemap_options['rsphere'] = (proj4_options['a'], proj4_options['a'])
 
+    # 左下角(origin)x
     if 'x_0' in proj4_options:
         basemap_options['llcrnrx'] = -proj4_options['x_0']
+    # 左下角(origin)y
     if 'y_0' in proj4_options:
         basemap_options['llcrnry'] = -proj4_options['y_0']
+    # 更新basemap参数
     basemap_options.update(**kwds)
     return basemap_options
 
 
 def basemap_from_proj4(proj4, **kwds):
     from mpl_toolkits.basemap import Basemap
+    # 将proj4字符串解析成basemap的构造参数
     basemap_options = basemap_options_from_proj4(proj4, **kwds)
+    # 如果是经纬度相关投影,就设置为cyl
     if basemap_options['projection'] in ('lonlat', 'longlat'):
         basemap_options['projection'] = 'cyl'
+    # 实例化basemap
     bmap = Basemap(**basemap_options)
     return bmap
 
@@ -552,8 +576,8 @@ def getproj4_from_cf_var(gridmapping, withgrid=False):
             if not np.isscalar(pv) and len(pv) > 1:
                 mapstr_bits['lat_2'] = pv[1]
         elif pk in (
-            'longitude_of_central_meridian',
-            'straight_vertical_longitude_from_pole'
+                'longitude_of_central_meridian',
+                'straight_vertical_longitude_from_pole'
         ):
             mapstr_bits['lon_0'] = pv
         elif pk == 'latitude_of_projection_origin':
@@ -598,6 +622,8 @@ def getproj(ifile, withgrid=False):
 
 def getproj4(ifile, withgrid=False):
     """
+    从文件中获取proj4字符串格式的投影
+
     Arguments:
       ifile - PseudoNetCDF file
       withgrid - True to include gridding parameters
@@ -607,9 +633,9 @@ def getproj4(ifile, withgrid=False):
     """
     from .conventions.ioapi import getmapdef
     if (
-        getattr(ifile, 'GDTYP', 0) in (1, 2, 6, 7) and
-        all([hasattr(ifile, k)
-             for k in 'P_GAM P_ALP P_BET XORIG YORIG XCELL YCELL'.split()])
+            getattr(ifile, 'GDTYP', 0) in (1, 2, 6, 7) and
+            all([hasattr(ifile, k)
+                 for k in 'P_GAM P_ALP P_BET XORIG YORIG XCELL YCELL'.split()])
     ):
         gridmapping = getmapdef(ifile, add=False)
         mapstr = getproj4_from_cf_var(gridmapping, withgrid=withgrid)
@@ -623,8 +649,8 @@ def getproj4(ifile, withgrid=False):
                     gridmapping.semi_major_axis
                 )
                 if (
-                    gridmapping.semi_minor_axis !=
-                    gridmapping.semi_major_axis
+                        gridmapping.semi_minor_axis !=
+                        gridmapping.semi_major_axis
                 ):
                     warn(
                         'Earth not a perfect sphere: using minimum ' +
@@ -634,8 +660,8 @@ def getproj4(ifile, withgrid=False):
             else:
                 mapstr += ' +to_meter=%s' % ifile.XCELL
     elif (
-        getattr(ifile, 'Conventions',
-                getattr(ifile, 'CONVENTIONS', ''))[:2].upper() == 'CF'
+            getattr(ifile, 'Conventions',
+                    getattr(ifile, 'CONVENTIONS', ''))[:2].upper() == 'CF'
     ):
         gridmappings = []
         for k, v in ifile.variables.items():
@@ -666,9 +692,9 @@ def getmap(ifile, resolution='i'):
     from mpl_toolkits.basemap import Basemap
     from .conventions.ioapi import get_ioapi_sphere
     if (
-        getattr(ifile, 'GDTYP', 0) in (2, 6, 7) and
-        all([hasattr(ifile, k)
-             for k in 'P_GAM P_ALP P_BET XORIG YORIG XCELL YCELL'.split()])
+            getattr(ifile, 'GDTYP', 0) in (2, 6, 7) and
+            all([hasattr(ifile, k)
+                 for k in 'P_GAM P_ALP P_BET XORIG YORIG XCELL YCELL'.split()])
     ):
         try:
             NROWS = len(ifile.dimensions['ROW'])
@@ -797,8 +823,8 @@ def sigma2coeff(fromvglvls, tovglvls):
     edges = np.interp(
         tovglvls[::-1],
         fromvglvls[::-1],
-        np.arange(fromvglvls.size)[::-1])[::-1]\
-        .repeat(2, 0)[1:-1].reshape(-1, 2).astype('d')
+        np.arange(fromvglvls.size)[::-1])[::-1] \
+                .repeat(2, 0)[1:-1].reshape(-1, 2).astype('d')
     coeff = np.zeros((fromvglvls.size - 1, tovglvls.size - 1), dtype='d')
     for li, (b, t) in enumerate(edges):
         ll = np.floor(b).astype('i')

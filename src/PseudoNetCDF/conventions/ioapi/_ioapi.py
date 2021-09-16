@@ -1,8 +1,10 @@
 from PseudoNetCDF.pncwarn import warn
 import numpy as np
+
 _withlatlon = False
 try:
     import pyproj
+
     _withlatlon = True
 except Exception:
     warn('pyproj could not be found, so IO/API coordinates cannot be ' +
@@ -50,7 +52,7 @@ def add_time_variable(ifileo, key):
     if sdate < 1400000:
         sdate += 2000000
     sdate = datetime(sdate // 1000, 1, 1, tzinfo=timezone.utc) + \
-        timedelta(days=(sdate % 1000) - 1)
+            timedelta(days=(sdate % 1000) - 1)
     sdate = sdate + timedelta(days=ifileo.STIME / 240000.)
     rdate = strptime('1970-01-01 00:00:00+0000', '%Y-%m-%d %H:%M:%S%z')
     if ifileo.TSTEP == 0:
@@ -169,14 +171,29 @@ def get_ioapi_sphere():
         return isph_parts * 2
 
 
+# 数字对应ioapi里面GDTYP属性
 _gdnames = {1: "latitude_longitude", 2: "lambert_conformal_conic",
             7: "mercator", 6: "polar_stereographic"}
 
 
 def getmapdef(ifileo, add=True):
-    gridname = _gdnames[ifileo.GDTYP]
+    """
+
+    Parameters
+    ----------
+    ifileo
+    add：是否把mapdef添加到源文件上
+
+    Returns
+    -------
+
+    """
+    gridname = _gdnames[ifileo.GDTYP]  # latitude_longitude,lambert_conformal_conic,mercator,polar_stereographic
+
+    # 如果添加就创建变量
     if add:
         mapdef = ifileo.createVariable(gridname, 'i', ())
+    # 不添加就新建变量
     else:
         from PseudoNetCDF import PseudoNetCDFVariable
         mapdef = PseudoNetCDFVariable(ifileo, gridname, 'i', ())
@@ -272,11 +289,11 @@ def add_lcc_coordinates(ifileo):
         elif ifileo.GDTYP == 6:
             mapstr = ('+proj=stere +a={3} +b={4} ' +
                       '+lon_0={0} +lat_0={1} +lat_ts={2}').format(
-                          mapdef.straight_vertical_longitude_from_pole,
-                          mapdef.latitude_of_projection_origin,
-                          mapdef.standard_parallel[0],
-                          mapdef.semi_major_axis,
-                          mapdef.semi_minor_axis)
+                mapdef.straight_vertical_longitude_from_pole,
+                mapdef.latitude_of_projection_origin,
+                mapdef.standard_parallel[0],
+                mapdef.semi_major_axis,
+                mapdef.semi_minor_axis)
             mapproj = pyproj.Proj(mapstr)
         elif ifileo.GDTYP == 7:
             mapstr = '+proj=merc +a=%s +b=%s +lat_ts=0 +lon_0=%s' % (
@@ -362,12 +379,13 @@ def add_lcc_coordinates(ifileo):
             def io2cf(x):
                 return {'ROW': 'latitude', 'COL': 'longitude',
                         'TSTEP': 'time', 'LAY': 'level'}.get(x, x)
+
             dims = [io2cf(d) for d in olddims]
         dims = [d for d in dims]  # Why was I excluding time  if d != 'time'
         if olddims != dims:
             if (varkey not in ('latitude', 'longitude') and
-                ('PERIM' in dims or
-                 ('latitude' in dims and 'longitude' in dims))):
+                    ('PERIM' in dims or
+                     ('latitude' in dims and 'longitude' in dims))):
                 try:
                     var.coordinates = ' '.join(dims)
                     var.grid_mapping = gridname
