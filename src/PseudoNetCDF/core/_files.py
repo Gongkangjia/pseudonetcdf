@@ -171,7 +171,7 @@ class PseudoNetCDFFile(PseudoNetCDFSelfReg, object):
     def ll2xy(self, lon, lat):
         """
         Converts lon/lat to x distances (no false easting/northing)
-
+        直接转换地理坐标系到投影坐标系
         Parameters
         ----------
         lon : scalar or iterable
@@ -293,7 +293,7 @@ class PseudoNetCDFFile(PseudoNetCDFSelfReg, object):
     def ll2ij(self, lon, lat, bounds='ignore', clean='none'):
         """
         Converts lon/lat to 0-based indicies (0,M), (0,N)
-
+        将经纬度转化为网格坐标
         Parameters
         ----------
         lon : scalar or iterable
@@ -315,19 +315,22 @@ class PseudoNetCDFFile(PseudoNetCDFSelfReg, object):
         lat = np.asarray(lat)
         p = self.getproj(withgrid=True)
         x, y = p(lon, lat)
+        #  转换为整数
         i = np.asarray(x).astype('i')
         j = np.asarray(y).astype('i')
         nx = len(self.dimensions[self._getxdim()])
         ny = len(self.dimensions[self._getydim()])
         if bounds == 'ignore':
             pass
-        else:
+        else:  # 如果超出了边界
             lowi = (i < 0)
             lowj = (j < 0)
             highi = (i >= nx)
             highj = (j >= ny)
             outb = (lowi | lowj | highi | highj)
             nout = outb.sum()
+
+            # 给警告
             if nout > 0:
                 message = '{} Points out of bounds; {}'.format(
                     nout, np.where(outb))
@@ -335,10 +338,10 @@ class PseudoNetCDFFile(PseudoNetCDFSelfReg, object):
                     raise ValueError(message)
                 else:
                     warn(message)
-        if clean == 'clip':
+        if clean == 'clip':  # 返回所在范围内的网格
             i = np.minimum(np.maximum(i, 0), nx - 1)
             j = np.minimum(np.maximum(j, 0), ny - 1)
-        elif clean == 'mask':
+        elif clean == 'mask':  # 将范围外的值mask掉
             i = np.ma.masked_greater(np.ma.masked_less(i, 0), nx - 1)
             j = np.ma.masked_greater(np.ma.masked_less(j, 0), ny - 1)
 
@@ -347,7 +350,7 @@ class PseudoNetCDFFile(PseudoNetCDFSelfReg, object):
     def xy2ll(self, x, y):
         """
         Converts x, y to lon, lat (no false easting/northing)
-
+        转换投影坐标到地理坐标系
         Parameters
         ----------
         x : scalar or iterable
@@ -386,7 +389,7 @@ class PseudoNetCDFFile(PseudoNetCDFSelfReg, object):
         i = np.asarray(i)
         j = np.asarray(j)
         p = self.getproj(withgrid=True)
-        lon, lat = p(i + 0.5, j + 0.5, inverse=True)
+        lon, lat = p(i + 0.5, j + 0.5, inverse=True) # 返回网格中心经纬度
         return lon, lat
 
     def date2num(self, time, timekey='time'):

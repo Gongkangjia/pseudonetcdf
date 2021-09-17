@@ -116,7 +116,7 @@ def add_time_variable(ifileo, key):
     var.long_name = ("synthesized time coordinate from SDATE, " +
                      "STIME, STEP global attributes")
 
-
+# 这里定义了不同的椭球
 # 0 Clarke 1866
 # 1 Clarke 1880
 # 2 Bessel
@@ -153,21 +153,34 @@ _BXIS = np.array([6356583.8, 6356514.86955, 6356078.96284, 6356772.2,
 
 
 def get_ioapi_sphere():
+    """
+    从环境变量中获取椭球长短半轴
+    """
     import os
     ENV_IOAPI_ISPH = os.environ.get('IOAPI_ISPH', None)
+
+    # 如果环境变量里面没有,就设置为6370000.和WRF一样?
     if ENV_IOAPI_ISPH is None:
         ENV_IOAPI_ISPH = '6370000.'
         warn('IOAPI_ISPH is assumed to be ' +
              ENV_IOAPI_ISPH + '; consistent with WRF')
+    # 切分,然后判断有几个数
     isph_parts = [eval(ip) for ip in ENV_IOAPI_ISPH.split(' ')]
+
+    # 如果大于2就报错
     if len(isph_parts) > 2:
         raise ValueError('IOAPI_ISPH must be 1 or 2 parameters (got: %s)' %
                          str(isph_parts))
+
+    # 正常是等于2 分别为长短半轴
     elif len(isph_parts) == 2:
         return isph_parts
-    elif isph_parts[0] >= 0 and isph_parts[0] < _AXIS.size:
+
+    # 如果为单个数字呢，就为index 然后去表里查找
+    elif 0 <= isph_parts[0] < _AXIS.size:
         return _AXIS[isph_parts[0]], _BXIS[isph_parts[0]]
     else:
+        # 长短半轴相等
         return isph_parts * 2
 
 

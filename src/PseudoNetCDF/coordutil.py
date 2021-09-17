@@ -56,6 +56,9 @@ def getlonlatcoordstr(ifile, makemesh=None):
 
 
 def _parse_ref_date(base):
+    """
+    这里个人感觉可以使用arrow模块来实现
+    """
     from datetime import datetime
     fmts = [
         # has time and Z
@@ -112,6 +115,7 @@ def gettimes(ifile):
      - Finds time variable (e.g., time or TFLAG, tau0)
      - Parses reference date
      - Converts
+     从文件中获取时间坐标
     """
     from datetime import datetime, timedelta
     if 'time' in ifile.variables.keys():
@@ -257,6 +261,9 @@ def getpresbnds(ifile, pref=101325., ptop=None):
 
 
 def getlatbnds(ifile):
+    """
+    获取网格边界纬度
+    """
     if 'latitude_bounds' in ifile.variables:
         latb = ifile.variables['latitude_bounds']
         unit = latb.units.strip()
@@ -291,6 +298,9 @@ def getlatbnds(ifile):
 
 
 def getybnds(ifile):
+    """
+    获取投影单位的Y边界
+    """
     if 'ROW' in ifile.dimensions:
         unit = 'y (m)'
         latb = np.arange(
@@ -305,6 +315,9 @@ def getybnds(ifile):
 
 
 def getlonbnds(ifile):
+    """
+    获取网格边界纬度
+    """
     if 'longitude_bounds' in ifile.variables:
         lonb = ifile.variables['longitude_bounds']
         unit = lonb.units.strip()
@@ -348,6 +361,9 @@ def getlonbnds(ifile):
 
 
 def getxbnds(ifile):
+    """
+    获取投影单位的X边界
+    """
     if 'COL' in ifile.dimensions:
         unit = 'x (m)'
         lonb = np.arange(
@@ -637,17 +653,23 @@ def getproj4(ifile, withgrid=False):
             all([hasattr(ifile, k)
                  for k in 'P_GAM P_ALP P_BET XORIG YORIG XCELL YCELL'.split()])
     ):
+        # 先从文件中获取参数
         gridmapping = getmapdef(ifile, add=False)
+        # 然后转成proj4字符串
         mapstr = getproj4_from_cf_var(gridmapping, withgrid=withgrid)
         if withgrid:
             dx = min(ifile.XCELL, ifile.YCELL)
+
+            # X方向和Y方向的分辨率应该是相同的,如果不同就使用小者,并给个warning
             if ifile.XCELL != ifile.YCELL:
                 warn('Grid is not regular: using minimum {}'.format(dx))
+
             if gridmapping.grid_mapping_name == 'latitude_longitude':
                 er = min(
                     gridmapping.semi_minor_axis,
                     gridmapping.semi_major_axis
                 )
+                # 长短半轴
                 if (
                         gridmapping.semi_minor_axis !=
                         gridmapping.semi_major_axis
@@ -660,28 +682,30 @@ def getproj4(ifile, withgrid=False):
             else:
                 mapstr += ' +to_meter=%s' % ifile.XCELL
     elif (
-            getattr(ifile, 'Conventions',
-                    getattr(ifile, 'CONVENTIONS', ''))[:2].upper() == 'CF'
+            # 没看懂这里为什么和CF比较,代表什么
+            getattr(ifile, 'Conventions', getattr(ifile, 'CONVENTIONS', ''))[:2].upper() == 'CF'
     ):
         gridmappings = []
+        # 如果有变量有grid_mapping属性,就添加到gridmappings
         for k, v in ifile.variables.items():
             if hasattr(v, 'grid_mapping'):
                 gridmappings.append(getattr(v, 'grid_mapping'))
 
+        # 如果一个都没有就假定为经纬度投影
         if len(gridmappings) == 0:
             warn('No known grid mapping; assuming lonlat')
             mapstr = '+proj=lonlat'
         else:
-            gridmappings = list(set(gridmappings))
-            if len(gridmappings) > 1:
+            gridmappings = list(set(gridmappings))  # 去重
+            if len(gridmappings) > 1:  # 如果有多个gridmappings 就取第一个
                 warn('Using first grid mapping of ' + str(gridmappings))
-            if not gridmappings[0] in ifile.variables:
+            if not gridmappings[0] in ifile.variables:  # 第一个如果不是变量,也设置为经纬度投影
                 warn(gridmappings[0] + ' could not be found; assuming lonlat')
                 mapstr = '+proj=lonlat'
             else:
                 gridmapping = ifile.variables[gridmappings[0]]
                 mapstr = getproj4_from_cf_var(gridmapping, withgrid=withgrid)
-    else:
+    else:  # 如果匹配不到,也设置为经纬度投影
         warn('No known grid mapping; assuming lonlat')
         mapstr = '+proj=lonlat'
     mapstr += ' +no_defs'
@@ -689,26 +713,31 @@ def getproj4(ifile, withgrid=False):
 
 
 def getmap(ifile, resolution='i'):
+    """
+    从文件中获取basemap地图
+
+    """
     from mpl_toolkits.basemap import Basemap
     from .conventions.ioapi import get_ioapi_sphere
     if (
             getattr(ifile, 'GDTYP', 0) in (2, 6, 7) and
             all([hasattr(ifile, k)
                  for k in 'P_GAM P_ALP P_BET XORIG YORIG XCELL YCELL'.split()])
-    ):
-        try:
+    ):  # 如果为ioapi
+        try:  # 先从数据中获取网格数
             NROWS = len(ifile.dimensions['ROW'])
             NCOLS = len(ifile.dimensions['COL'])
-        except KeyError:
+        except KeyError:  # 数据中没有就从属性中获取
             NROWS = ifile.NROWS
             NCOLS = ifile.NCOLS
 
-        llcrnrx = ifile.XORIG
-        urcrnrx = ifile.XORIG + NCOLS * ifile.XCELL
+        llcrnrx = ifile.XORIG  # 左下角x
+        urcrnrx = ifile.XORIG + NCOLS * ifile.XCELL  # 右上角x
 
-        llcrnry = ifile.YORIG
-        urcrnry = ifile.YORIG + NROWS * ifile.YCELL
-        semi_major_axis, semi_minor_axis = get_ioapi_sphere()
+        llcrnry = ifile.YORIG  # 左下角y
+        urcrnry = ifile.YORIG + NROWS * ifile.YCELL  # 右上角y
+        semi_major_axis, semi_minor_axis = get_ioapi_sphere()  # 长短半轴
+        # lambert投影,模式中最常用的投影
         if ifile.GDTYP == 2:
             from mpl_toolkits.basemap import pyproj
             p = pyproj.Proj(proj='lcc', a=semi_major_axis, b=semi_major_axis,
@@ -723,6 +752,7 @@ def getmap(ifile, resolution='i'):
                         llcrnrlon=llcrnrlon, llcrnrlat=llcrnrlat,
                         urcrnrlat=urcrnrlat, urcrnrlon=urcrnrlon,
                         resolution=resolution, suppress_ticks=False)
+        # Stereographic投影
         elif ifile.GDTYP == 6:
             p = getproj(ifile, withgrid=True)
             lclon, lclat = p(ifile.NCOLS / 2., 0, inverse=True)
@@ -735,6 +765,7 @@ def getmap(ifile, resolution='i'):
                         lat_ts=ifile.P_BET, lon_0=ifile.P_GAM, llcrnrlon=lllon,
                         llcrnrlat=lllat, urcrnrlon=urlon, urcrnrlat=urlat,
                         rsphere=(semi_major_axis, semi_major_axis))
+        # Mercator 投影
         elif ifile.GDTYP == 7:
             from mpl_toolkits.basemap import pyproj
             mapstr = '+proj=merc +a=%s +b=%s +lat_ts=0 +lon_0=%s' % (
@@ -749,7 +780,7 @@ def getmap(ifile, resolution='i'):
                         urcrnrlon=urcrnrlon, resolution=resolution,
                         suppress_ticks=False)
         print('Found IO/API Mapping parameters')
-    else:
+    else:  # 如果不是ioapi文件,就直接找边界经纬度
         kwds = dict(suppress_ticks=False)
         try:
             lat, latunit = getlatbnds(ifile)
