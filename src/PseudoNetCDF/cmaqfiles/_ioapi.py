@@ -839,6 +839,7 @@ def ncf2ioapi(
     **props
 ):
     """
+    # 这是写ioapi文件最重要的函数
     Parameters
     ----------
     nfile : netcdf-like file
@@ -869,6 +870,7 @@ def ncf2ioapi(
     -------
     out : netCDF4.Dataset
     """
+    # 查找四个维度对应的变量
     time = _fromdefaults(nfile, tstepkeys)
     lay = _fromdefaults(nfile, laykeys)
     row = _fromdefaults(nfile, rowkeys)
@@ -883,27 +885,30 @@ def ncf2ioapi(
         dim2dim[row] = 'ROW'
     if col != 'COL':
         dim2dim[col] = 'COL'
-    if col != 'COL':
-        dim2dim[col] = 'COL'
 
     if verbose > 0:
         print('Dimension translation', dim2dim)
 
+    # 这是ioapi默认的属性
     fileprops = _ioapi_defaults.copy()
+
+    # 用有值的覆盖掉默认的
     for k in nfile.ncattrs():
         fileprops[k] = getattr(nfile, k)
 
+    # 参数的优先级最高
     fileprops.update(**props)
-
+    # 哦？还有好几种文件类型的吗？
     if fileprops['FTYPE'] == 2:
         indims = (time, lay, perim)
     else:
         indims = (time, lay, row, col)
 
-    outdims = tuple(dim2dim.get(k, k) for k in indims)
-    varkeys = [k for k, v in nfile.variables.items() if v.dimensions == indims]
+    outdims = tuple(dim2dim.get(k, k) for k in indims)  # 输出的纬度
+    varkeys = [k for k, v in nfile.variables.items() if v.dimensions == indims]  # 所有符合维度的变量
     varlist = ''.join([k.ljust(16) for k in varkeys])
 
+    # 设置全局的一些属性
     fileprops['VAR-LIST'] = varlist
     nvar = fileprops['NVARS'] = len(varkeys)
     nthk = fileprops['NTHIK']
@@ -916,6 +921,7 @@ def ncf2ioapi(
     for pk, pv in fileprops.items():
         _tryset(ofile, pk, pv, prefix='file')
 
+    # 创建所有维度
     ofile.createDimension('TSTEP', None)
     ofile.createDimension('DATE-TIME', 2)
     ofile.createDimension('LAY', nz)
@@ -929,6 +935,7 @@ def ncf2ioapi(
     else:
         raise ValueError('FTYPE is unknown; must be 1 or 2')
 
+    # 获取到的时间变量转化为ioapi格式的
     times = nfile.getTimes()
     tv = ofile.createVariable('TFLAG', 'i', ('TSTEP', 'VAR', 'DATE-TIME'))
     tv.units = '<YYYYJJJ,HHMMSS>'
@@ -936,6 +943,7 @@ def ncf2ioapi(
     tv.var_desc = 'TFLAG'.ljust(80)
     yyyyjjj = np.array([t.strftime('%Y%j') for t in times], dtype='i')
     hhmmss = np.array([t.strftime('%H%M%S') for t in times], dtype='i')
+
     for k in varkeys:
         v = nfile.variables[k]
         ov = ofile.createVariable(k, v.dtype.char, outdims)
@@ -946,6 +954,7 @@ def ncf2ioapi(
             pv = getattr(v, pk)
             _tryset(ov, pk, pv, prefix=k)
 
+    #开始给变量赋值
     tv[:yyyyjjj.size, :, 0] = yyyyjjj[:, None].repeat(nvar, 1)
     tv[:yyyyjjj.size, :, 1] = hhmmss[:, None].repeat(nvar, 1)
     dt = (times[-1] - times[0]).total_seconds() / (len(times) - 1)
@@ -953,6 +962,7 @@ def ncf2ioapi(
     ofile.TSTEP = int(tmpd.strftime('%H%M%S'))
     ofile.SDATE = int(times[0].strftime('%Y%j'))
     ofile.STIME = int(times[0].strftime('%H%M%S'))
+
     # if (
     #     any([vk.startswith('lat') for vk in nfile.variables]) and
     #     any([vk.startswith('lon') for vk in nfile.variables])
